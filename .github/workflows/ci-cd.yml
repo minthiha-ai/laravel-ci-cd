@@ -81,7 +81,7 @@ jobs:
 
       steps:
         - name: Checkout Repository
-        uses: actions/checkout@v4
+          uses: actions/checkout@v4
 
         - name: Set up PHP
           uses: shivammathur/setup-php@v2
@@ -103,7 +103,7 @@ jobs:
           run: php artisan migrate --force --database=mysql
 
         - name: Run Tests
-        run: php artisan test
+          run: php artisan test
 
   package:
     name: Build & Push Docker Image
