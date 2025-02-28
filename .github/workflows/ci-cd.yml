@@ -97,13 +97,13 @@ jobs:
           run: cp .env.example .env
 
         - name: Set Database Credentials
-          run: |
-            echo "DB_CONNECTION=mysql" >> .env
-            echo "DB_HOST=127.0.0.1" >> .env
-            echo "DB_PORT=3306" >> .env
-            echo "DB_DATABASE=db_user_service" >> .env
-            echo "DB_USERNAME=root" >> .env
-            echo "DB_PASSWORD=root@admin123" >> .env
+          run: echo "DB_CONNECTION=mysql" >> .env
+              echo "DB_HOST=127.0.0.1" >> .env
+              echo "DB_PORT=3306" >> .env
+              echo "DB_DATABASE=db_user_service" >> .env
+              echo "DB_USERNAME=root" >> .env
+              echo "DB_PASSWORD=root@admin123" >> .env
+
 
         - name: Generate Application Key
           run: php artisan key:generate
