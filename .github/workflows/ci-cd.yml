@@ -105,7 +105,6 @@ jobs:
             echo "DB_USERNAME=root" >> .env
             echo "DB_PASSWORD=root@admin123" >> .env
 
-
         - name: Generate Application Key
           run: php artisan key:generate
 
