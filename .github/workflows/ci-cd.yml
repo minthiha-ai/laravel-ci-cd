@@ -13,9 +13,17 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   SERVER_IP: ${{ secrets.SERVER_IP }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  APP_KEY: ${{ secrets.APP_KEY }}
+  DB_HOST: ${{ secrets.DB_HOST }}
+  DB_PORT: ${{ secrets.DB_PORT }}
+  DB_DATABASE: ${{ secrets.DB_DATABASE }}
+  DB_USERNAME: ${{ secrets.DB_USERNAME }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  REDIS_HOST: ${{ secrets.REDIS_HOST }}
+  REDIS_PORT: ${{ secrets.REDIS_PORT }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
   checkout:
@@ -161,11 +169,12 @@ jobs:
             # Pull latest Docker image
             docker pull $DOCKER_USERNAME/$IMAGE_NAME:latest
 
-            # Stop old container
+            # Stop old container if running
             docker stop user-service-app || true
+            docker rm user-service-app || true
 
             # Start new container
-            docker run --rm -d --name user-service-app \
+            docker run -d --name user-service-app \
               --restart unless-stopped \
               -p 8080:80 \
               --env-file /root/.env \
@@ -181,7 +190,6 @@ jobs:
             # Run database migrations
             docker exec user-service-app php artisan migrate --force
 
-            # Clear cache
-            docker exec user-service-app php artisan config:clear
-            docker exec user-service-app php artisan cache:clear
+            # Clear cache & config
+            docker exec user-service-app php artisan optimize:clear
           EOF
