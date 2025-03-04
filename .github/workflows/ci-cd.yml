@@ -9,7 +9,13 @@ on:
       - main
 
 env:
+  IMAGE_NAME: user-service
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  SERVER_IP: ${{ secrets.SERVER_IP }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
 jobs:
   checkout:
@@ -35,7 +41,7 @@ jobs:
           tools: composer:v2
 
       - name: Install Dependencies
-        run: composer install --no-dev --prefer-dist --optimize-autoloader
+        run: composer install --optimize-autoloader
 
       - name: Set Permissions
         run: chmod -R 777 storage bootstrap/cache
@@ -84,7 +90,7 @@ jobs:
           tools: composer:v2
 
       - name: Install Dependencies
-        run: composer install --no-dev --prefer-dist --optimize-autoloader
+        run: composer install
 
       - name: Copy .env
         run: cp .env.example .env
@@ -101,11 +107,10 @@ jobs:
       - name: Wait for MySQL to be ready
         run: |
           for i in {1..30}; do
-            nc -z 127.0.0.1 3306 && echo "MySQL is up!" && exit 0
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && break
             echo "Waiting for MySQL..."
             sleep 2
           done
-          exit 1
 
       - name: Generate Application Key
         run: php artisan key:generate
@@ -116,8 +121,8 @@ jobs:
       - name: Run Tests
         run: vendor/bin/phpunit
 
-  deploy:
-    name: Deploy to Vercel
+  package:
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: test
 
@@ -125,25 +130,58 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Set Environment Variables for Vercel
-        run: |
-          vercel env add APP_KEY $(php artisan key:generate --show) --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add APP_ENV production --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add APP_DEBUG false --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_CONNECTION mysql --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_HOST your-db-host --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_PORT 3306 --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_DATABASE your-db-name --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_USERNAME your-db-user --token ${{ secrets.VERCEL_TOKEN }}
-          vercel env add DB_PASSWORD your-db-password --token ${{ secrets.VERCEL_TOKEN }}
+      - name: Build Docker Image
+        run: docker build -t $DOCKER_USERNAME/$IMAGE_NAME:latest .
 
-      - name: Deploy to Vercel
-        run: vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes
+      - name: Push Docker Image to Docker Hub
+        run: docker push $DOCKER_USERNAME/$IMAGE_NAME:latest
 
-      - name: Clear Laravel Cache
-        run: |
-          vercel exec php artisan config:clear --token ${{ secrets.VERCEL_TOKEN }}
-          vercel exec php artisan cache:clear --token ${{ secrets.VERCEL_TOKEN }}
+    deploy:
+      name: Deploy to DigitalOcean
+      runs-on: ubuntu-latest
+      needs: package
+
+      steps:
+        - name: Checkout Repository
+          uses: actions/checkout@v4
+
+        - name: Set up SSH
+          run: |
+            mkdir -p ~/.ssh
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+
+        - name: Deploy to DigitalOcean
+          run: |
+            ssh root@$SERVER_IP << 'EOF'
+              # Pull latest Docker image
+              docker pull $DOCKER_USERNAME/$IMAGE_NAME:latest
+
+              # Stop old container
+              docker stop user-service-app || true
+
+              # Start new container
+              docker run --rm -d --name user-service-app \
+                --restart unless-stopped \
+                -p 8080:80 \
+                --env-file /root/.env \
+                $DOCKER_USERNAME/$IMAGE_NAME:latest
+
+              # Wait for MySQL to be ready
+              for i in {1..30}; do
+                nc -z 127.0.0.1 3306 && echo "MySQL is up!" && break
+                echo "Waiting for MySQL..."
+                sleep 2
+              done
+
+              # Run database migrations
+              docker exec user-service-app php artisan migrate --force
+
+              # Clear cache
+              docker exec user-service-app php artisan config:clear
+              docker exec user-service-app php artisan cache:clear
+            EOF
