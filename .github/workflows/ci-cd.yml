@@ -108,7 +108,7 @@ jobs:
       - name: Set Database Credentials
         run: |
           echo "DB_CONNECTION=mysql" >> .env
-          echo "DB_HOST=mysql" >> .env
+          echo "DB_HOST=user-service-db" >> .env
           echo "DB_PORT=3306" >> .env
           echo "DB_DATABASE=db_user_service" >> .env
           echo "DB_USERNAME=user_service" >> .env
@@ -117,7 +117,7 @@ jobs:
       - name: Wait for MySQL to be ready
         run: |
           for i in {1..30}; do
-            mysqladmin ping -h mysql -uroot -proot && break
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && break
             echo "Waiting for MySQL..."
             sleep 2
           done
