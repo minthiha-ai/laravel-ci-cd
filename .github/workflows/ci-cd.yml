@@ -78,13 +78,15 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: db_user_service
+          MYSQL_USER: user_service
+          MYSQL_PASSWORD: root@admin123
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
       - name: Checkout Repository
@@ -109,8 +111,8 @@ jobs:
           echo "DB_HOST=mysql" >> .env
           echo "DB_PORT=3306" >> .env
           echo "DB_DATABASE=db_user_service" >> .env
-          echo "DB_USERNAME=root" >> .env
-          echo "DB_PASSWORD=root" >> .env
+          echo "DB_USERNAME=user_service" >> .env
+          echo "DB_PASSWORD=root@admin123" >> .env
 
       - name: Wait for MySQL to be ready
         run: |
