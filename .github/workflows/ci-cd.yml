@@ -51,6 +51,9 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
+      - name: Install Parallel Test Dependencies
+        run: composer require --dev brianium/paratest --with-all-dependencies
+
       - name: Copy Environment File
         run: cp .env.ci .env
 
@@ -103,16 +106,25 @@ jobs:
             # Pull latest Docker image
             docker pull $DOCKER_USERNAME/$IMAGE_NAME:latest
 
-            # Stop old container if running
+            # Stop and remove old container (if exists)
             docker stop user-service-app || true
             docker rm user-service-app || true
 
-            # Start new container
+            # Run new container
             docker run -d --name user-service-app \
               --restart unless-stopped \
               -p 8080:80 \
               --env-file /root/.env \
               $DOCKER_USERNAME/$IMAGE_NAME:latest
+
+            # Ensure container is running before executing commands
+            sleep 10
+            if [ "$(docker ps -q -f name=user-service-app)" ]; then
+              echo "Container is running..."
+            else
+              echo "ERROR: Container failed to start!"
+              exit 1
+            fi
 
             # Run database migrations
             docker exec user-service-app php artisan migrate --force
