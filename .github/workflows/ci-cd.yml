@@ -120,9 +120,9 @@ jobs:
               --restart unless-stopped \
               -p 8080:80 \
               --env-file /root/.env \
-              $IMAGE_TAG
+              $IMAGE_TAG || { echo "ERROR: Container failed to start!"; exit 1; }
 
-            # Ensure container is running before executing commands
+            # Ensure container is running
             sleep 10
             if [ "$(docker ps -q -f name=user-service-app)" ]; then
               echo "Container is running..."
@@ -132,7 +132,7 @@ jobs:
             fi
 
             # Run database migrations
-            docker exec user-service-app php artisan migrate --force
+            docker exec user-service-app php artisan migrate --force || { echo "Migration failed!"; exit 1; }
 
             # Clear cache & config
             docker exec user-service-app php artisan optimize:clear
