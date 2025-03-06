@@ -79,43 +79,32 @@ jobs:
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build Docker Image
-        run: docker build -t $DOCKER_USERNAME/$IMAGE_NAME:latest .
+        run: |
+          IMAGE_TAG="${{ secrets.DOCKER_USERNAME }}/user-service:latest"
+          echo "Building Image: $IMAGE_TAG"
+          docker build -t $IMAGE_TAG .
 
       - name: Push Docker Image to Docker Hub
-        run: docker push $DOCKER_USERNAME/$IMAGE_NAME:latest
-
-  deploy:
-    name: Deploy to DigitalOcean
-    runs-on: ubuntu-latest
-    needs: package
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up SSH
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+          IMAGE_TAG="${{ secrets.DOCKER_USERNAME }}/user-service:latest"
+          docker push $IMAGE_TAG
 
       - name: Deploy to DigitalOcean
         run: |
           ssh root@$SERVER_IP << 'EOF'
-            # Pull latest Docker image
-            docker pull $DOCKER_USERNAME/$IMAGE_NAME:latest
+            IMAGE_TAG="${{ secrets.DOCKER_USERNAME }}/user-service:latest"
 
-            # Stop and remove old container (if exists)
+            echo "Deploying image: $IMAGE_TAG"
+            docker pull $IMAGE_TAG || { echo "ERROR: Failed to pull image!"; exit 1; }
+
             docker stop user-service-app || true
             docker rm user-service-app || true
 
-            # Run new container
             docker run -d --name user-service-app \
               --restart unless-stopped \
               -p 8080:80 \
               --env-file /root/.env \
-              $DOCKER_USERNAME/$IMAGE_NAME:latest
+              $IMAGE_TAG
 
             # Ensure container is running before executing commands
             sleep 10
